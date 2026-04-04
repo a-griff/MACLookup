@@ -17,32 +17,16 @@ CACHE_FILE="./maclookup.cache"
 ENABLE_ONLINE_LOOKUP="y" # <"y/n">
 
 # ---- PREFIX DATABASE ----
+# SYNTAX:<NAME>|<MAC_PREFIX>
 DB=(
 "Amcrest Technologies|9C:8E:CD,A0:60:32"
-"Thingino(Cinnado)|02:07:25"
+"Cinnado|02:07:25"
 )
 
 # ---- FUNCTIONS ----
 
-show_usage() {
-    echo "USAGE:"
-    echo "  $0 <MAC1,MAC2,...>"
-    echo
-    echo "DESCRIPTION:"
-    echo "  Lookup vendor names from MAC addresses using:"
-    echo "    1) Local prefix database"
-    echo "    2) Nmap database (if enabled)"
-    echo "    3) Cache file (if enabled)"
-    echo "    4) Online lookup (if enabled)"
-    echo
-    echo "EXAMPLE:"
-    echo "  $0 9C:8E:CD:27:0C:B3,A0:60:32:03:61:33"
-}
-
 init_cache() {
-    if [ "$ENABLE_CACHE_FILE" != "y" ]; then
-        return
-    fi
+    [ "$ENABLE_CACHE_FILE" != "y" ] && return
 
     if [ ! -f "$CACHE_FILE" ]; then
         {
@@ -64,7 +48,9 @@ get_prefix() {
 }
 
 lookup_local_db() {
-    local prefix="$1"
+    local mac="$1"
+    local best_match=""
+    local best_len=0
 
     for ENTRY in "${DB[@]}"; do
         NAME="${ENTRY%%|*}"
@@ -73,20 +59,27 @@ lookup_local_db() {
         IFS=',' read -ra PLIST <<< "$PREFIXES"
 
         for P in "${PLIST[@]}"; do
-            if [ "$prefix" = "$P" ]; then
-                echo "$NAME"
-                return
+            P=$(echo "$P" | tr '[:lower:]' '[:upper:]')
+
+            if [[ "$mac" == "$P"* ]]; then
+                LEN=${#P}
+
+                if (( LEN > best_len )); then
+                    best_len=$LEN
+                    best_match="$NAME"
+                fi
             fi
         done
     done
+
+    [ -n "$best_match" ] && echo "$best_match"
 }
 
 lookup_nmap() {
     local mac="$1"
 
-    if [ "$ENABLE_NMAP_LOOKUP" != "y" ] || [ ! -f "$NMAP_DB" ]; then
-        return
-    fi
+    [ "$ENABLE_NMAP_LOOKUP" != "y" ] && return
+    [ ! -f "$NMAP_DB" ] && return
 
     HEX=$(echo "$mac" | tr -d ':')
 
@@ -104,9 +97,7 @@ lookup_nmap() {
 lookup_cache() {
     local prefix="$1"
 
-    if [ "$ENABLE_CACHE_FILE" != "y" ]; then
-        return
-    fi
+    [ "$ENABLE_CACHE_FILE" != "y" ] && return
 
     grep -i "^$prefix|" "$CACHE_FILE" | head -n1 | cut -d'|' -f2
 }
@@ -114,16 +105,12 @@ lookup_cache() {
 lookup_online() {
     local prefix="$1"
 
-    if [ "$ENABLE_ONLINE_LOOKUP" != "y" ]; then
-        return
-    fi
+    [ "$ENABLE_ONLINE_LOOKUP" != "y" ] && return
 
     PREFIX_CLEAN=$(echo "$prefix" | tr -d ':')
     ONLINE=$(curl -s --max-time "$CURL_TIMEOUT" "https://api.macvendors.com/$PREFIX_CLEAN")
 
-    if echo "$ONLINE" | grep -qi 'errors'; then
-        return
-    fi
+    echo "$ONLINE" | grep -qi 'errors' && return
 
     echo "$ONLINE"
 
@@ -136,16 +123,8 @@ lookup_online() {
 
 # ---- MAIN ----
 
-# Help flags
-case "$1" in
-    -h|--help|-?)
-        show_usage
-        exit 0
-        ;;
-esac
-
 if [ -z "$1" ]; then
-    show_usage
+    echo "Usage: $0 <MAC1,MAC2,...>"
     exit 1
 fi
 
@@ -160,28 +139,24 @@ for RAWMAC in "${MACS[@]}"; do
 
     FOUND=""
 
-    # 1. Local
-    FOUND=$(lookup_local_db "$PREFIX")
+    FOUND=$(lookup_local_db "$MAC")
     if [ -n "$FOUND" ]; then
         echo "$MAC -> $FOUND"
         continue
     fi
 
-    # 2. Nmap
     FOUND=$(lookup_nmap "$MAC")
     if [ -n "$FOUND" ]; then
         echo "$MAC -> ($FOUND)"
         continue
     fi
 
-    # 3. Cache
     FOUND=$(lookup_cache "$PREFIX")
     if [ -n "$FOUND" ]; then
         echo "$MAC -> ($FOUND)"
         continue
     fi
 
-    # 4. Online
     FOUND=$(lookup_online "$PREFIX")
     if [ -n "$FOUND" ]; then
         echo "$MAC -> ($FOUND)"

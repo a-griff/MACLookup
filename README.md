@@ -10,3 +10,5 @@ MACLookup.sh - Shell script for *NIX machines.
 MACLookup.bas - FreeBASIC version. 
 - Run "fbc MACLookup.bas" to build the executable.
 - Creates ./MACLookup.conf which contains user settings
+
+MACLookup.pl - Perl version.

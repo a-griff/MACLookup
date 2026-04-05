@@ -19,7 +19,7 @@ ENABLE_ONLINE_LOOKUP="y" # <"y/n">
 # ---- PREFIX DATABASE ----
 DB=(
 "Amcrest Technologies|9C:8E:CD,A0:60:32"
-"Thingino(Cinnado)|02:07:25"
+"Hangzhou Xiongmai Technology|00:12:10,00:1F:B7,00:1A:1D,00:50:56"
 )
 
 # ---- FUNCTIONS ----
